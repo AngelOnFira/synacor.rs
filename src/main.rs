@@ -1,6 +1,4 @@
-use std::collections::HashMap;
 use std::convert::TryFrom;
-use std::convert::TryInto;
 use std::fs::File;
 use std::io::prelude::*;
 
@@ -27,21 +25,21 @@ fn write(
 ) {
     match position {
         0..=32767 => memory[position as usize] = data,
-        32767..=32775 => registers[(position - 32767) as usize] = data,
+        32768..=32775 => registers[(position - 32768) as usize] = data,
         _ => unreachable!(),
     };
 }
 
 fn read(memory: &mut [u16; u16::MAX as usize], registers: &mut [u16; 8], position: u16) -> u16 {
-    match position {
+    match memory[position as usize] {
         0..=32767 => memory[position as usize],
-        32768..=32775 => registers[(position - 32767) as usize],
+        32768..=32775 => registers[(memory[position as usize] - 32768) as usize],
         _ => unreachable!(),
     }
 }
 
 fn run_program(ints: &mut Vec<u16>) {
-    let mut cursor = 0;
+    let mut cursor: usize = 0;
 
     let mut registers: [u16; 8] = [0; 8];
     let mut stack: Vec<u16> = Vec::new();
@@ -53,11 +51,15 @@ fn run_program(ints: &mut Vec<u16>) {
     }
 
     loop {
-        let a = memory[cursor + 1];
-        let b = memory[cursor + 2];
-        let c = memory[cursor + 3];
+        let a = read(&mut memory, &mut registers, (cursor + 1) as u16);
+        let b = read(&mut memory, &mut registers, (cursor + 2) as u16);
+        let c = read(&mut memory, &mut registers, (cursor + 3) as u16);
 
-        match ints[cursor] {
+        // println!("{:?}", registers.clone());
+        // println!("{} {} {} {} {}", cursor, memory[cursor], a, b, c);
+        // println!("");
+
+        match memory[cursor] {
             0 => {
                 // stop execution and terminate the program
                 println!("Exiting at {}", cursor);
@@ -76,7 +78,12 @@ fn run_program(ints: &mut Vec<u16>) {
             3 => {
                 // remove the top element from the stack and write it into <a>;
                 // empty stack = error
-                write(&mut memory, &mut registers, a, stack.pop().unwrap());
+                write(
+                    &mut memory,
+                    &mut registers,
+                    (cursor + 1) as u16,
+                    stack.pop().unwrap(),
+                );
                 cursor += 1;
             }
             4 => {
@@ -120,38 +127,48 @@ fn run_program(ints: &mut Vec<u16>) {
             }
             9 => {
                 // assign into <a> the sum of <b> and <c> (modulo 32768)
-                write(&mut memory, &mut registers, a, (b + c) % 32768);
+                write(
+                    &mut memory,
+                    &mut registers,
+                    (cursor + 1) as u16,
+                    (b + c) % 32768,
+                );
                 cursor += 3;
             }
             10 => {
                 // assign into <a> the product of <b> and <c> (modulo 32768)
-                write(&mut memory, &mut registers, a, (b * c) % 32768);
+                write(
+                    &mut memory,
+                    &mut registers,
+                    (cursor + 1) as u16,
+                    (b * c) % 32768,
+                );
                 cursor += 3;
             }
             11 => {
                 // store into <a> the remainder of <b> divided by <c>
-                write(&mut memory, &mut registers, a, (b % c) % 32768);
+                write(&mut memory, &mut registers, (cursor + 1) as u16, b % c);
                 cursor += 3;
             }
             12 => {
                 // stores into <a> the bitwise and of <b> and <c>
-                write(&mut memory, &mut registers, a, b & c);
+                write(&mut memory, &mut registers, (cursor + 1) as u16, b & c);
                 cursor += 3;
             }
             13 => {
                 // stores into <a> the bitwise or of <b> and <c>
-                write(&mut memory, &mut registers, a, b | c);
+                write(&mut memory, &mut registers, (cursor + 1) as u16, b | c);
                 cursor += 3;
             }
             14 => {
                 // stores 15-bit bitwise inverse of <b> in <a>
-                write(&mut memory, &mut registers, a, !b);
+                write(&mut memory, &mut registers, (cursor + 1) as u16, !b);
                 cursor += 2;
             }
             15 => {
                 // read memory at address <b> and write it to <a>
                 let b_data = read(&mut memory, &mut registers, b);
-                write(&mut memory, &mut registers, a, b_data);
+                write(&mut memory, &mut registers, (cursor + 1) as u16, b_data);
                 cursor += 2;
             }
             16 => {
@@ -197,7 +214,12 @@ fn run_program(ints: &mut Vec<u16>) {
 
                     stdin_chars = stdin.chars().map(|x| x as u16).collect();
                 }
-                write(&mut memory, &mut registers, a, stdin_chars.remove(0));
+                write(
+                    &mut memory,
+                    &mut registers,
+                    (cursor + 1) as u16,
+                    stdin_chars.remove(0),
+                );
             }
             21 => {
                 // noop
@@ -206,7 +228,15 @@ fn run_program(ints: &mut Vec<u16>) {
         }
 
         cursor += 1;
-        // println!("{}", cursor);
-        if cursor % 10 == 0 {}
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    
+    #[test]
+    fn exploration() {
+        run_program(vec![1,2,3]);
     }
 }
