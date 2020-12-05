@@ -89,7 +89,7 @@ fn run_program(ints: &mut Vec<u16>) {
             4 => {
                 // set <a> to 1 if <b> is equal to <c>; set it to 0 otherwise
                 if b == c {
-                    write(&mut memory, &mut registers, (cursor + 1) as u16, 1);
+                    write(&mut memory, &mut registers, memory[(cursor + 1) as usize], 1); // COMMENT: This change I think should be made to all write calls; I think you want the memory at the cursor rather than the cursor itself
                 } else {
                     write(&mut memory, &mut registers, (cursor + 1) as u16, 0);
                 }
@@ -179,7 +179,7 @@ fn run_program(ints: &mut Vec<u16>) {
             17 => {
                 // write the address of the next instruction to the stack and
                 // jump to <a>
-                stack.push(b);
+                stack.push(cursor + 1); // COMMENT: cursor + 1 is the next instruction
                 cursor = (a - 1) as usize;
             }
             18 => {
