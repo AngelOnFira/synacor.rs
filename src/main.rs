@@ -23,9 +23,22 @@ fn write(
     position: u16,
     data: u16,
 ) {
-    match position {
-        0..=32767 => memory[position as usize] = data,
-        32768..=32775 => registers[(position - 32768) as usize] = data,
+    match memory[position as usize] {
+        0..=32767 => memory[memory[position as usize] as usize] = data,
+        32768..=32775 => registers[(memory[position as usize] - 32768) as usize] = data,
+        _ => unreachable!(),
+    };
+}
+
+fn write2(
+    memory: &mut [u16; u16::MAX as usize],
+    registers: &mut [u16; 8],
+    address: u16,
+    data: u16,
+) {
+    match address {
+        0..=32767 => memory[address as usize] = data,
+        32768..=32775 => registers[((address as usize) - 32768) as usize] = data,
         _ => unreachable!(),
     };
 }
@@ -67,7 +80,7 @@ fn run_program(ints: &mut Vec<u16>) {
             }
             1 => {
                 // set register <a> to the value of <b>
-                registers[a as usize] = b;
+                registers[(memory[(cursor + 1) as usize] - 32768) as usize] = b;
                 cursor += 2;
             }
             2 => {
@@ -89,7 +102,7 @@ fn run_program(ints: &mut Vec<u16>) {
             4 => {
                 // set <a> to 1 if <b> is equal to <c>; set it to 0 otherwise
                 if b == c {
-                    write(&mut memory, &mut registers, memory[(cursor + 1) as usize], 1); // COMMENT: This change I think should be made to all write calls; I think you want the memory at the cursor rather than the cursor itself
+                    write(&mut memory, &mut registers, (cursor + 1) as u16, 1);
                 } else {
                     write(&mut memory, &mut registers, (cursor + 1) as u16, 0);
                 }
@@ -141,7 +154,7 @@ fn run_program(ints: &mut Vec<u16>) {
                     &mut memory,
                     &mut registers,
                     (cursor + 1) as u16,
-                    (b * c) % 32768,
+                    (((b as u32) * (c as u32)) % 32768) as u16,
                 );
                 cursor += 3;
             }
@@ -162,7 +175,7 @@ fn run_program(ints: &mut Vec<u16>) {
             }
             14 => {
                 // stores 15-bit bitwise inverse of <b> in <a>
-                write(&mut memory, &mut registers, (cursor + 1) as u16, !b);
+                write(&mut memory, &mut registers, (cursor + 1) as u16, (b | 0b1000000000000000) ^ 0b1111111111111111);
                 cursor += 2;
             }
             15 => {
@@ -173,13 +186,13 @@ fn run_program(ints: &mut Vec<u16>) {
             }
             16 => {
                 // write the value from <b> into memory at address <a>
-                write(&mut memory, &mut registers, a, b);
+                write2(&mut memory, &mut registers, a, b);
                 cursor += 2;
             }
             17 => {
                 // write the address of the next instruction to the stack and
                 // jump to <a>
-                stack.push(cursor + 1); // COMMENT: cursor + 1 is the next instruction
+                stack.push((cursor + 2) as u16);
                 cursor = (a - 1) as usize;
             }
             18 => {
@@ -234,7 +247,7 @@ fn run_program(ints: &mut Vec<u16>) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn exploration() {
         run_program(vec![1,2,3]);
